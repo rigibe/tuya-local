@@ -1,0 +1,128 @@
+name: Fan coil
+products:
+  - id: i87zmqf7dckzhhj1
+    manufacturer: Ideal Clima
+    model: Ikaro
+entities:
+  - entity: climate
+    dps:
+      - id: 1
+        type: boolean
+        name: hvac_mode
+        mapping:
+          - dps_val: false
+            value: "off"
+          - dps_val: true
+            constraint: mode
+            conditions:
+              - dps_val: cold
+                value: cool
+              - dps_val: hot
+                value: heat
+              - dps_val: dehu
+                value: dry
+              - dps_val: fan
+                value: fan_only
+              - dps_val: auto
+                value: auto
+      - id: 2
+        type: integer
+        name: temperature
+        unit: C
+        range:
+          min: 8
+          max: 32
+      - id: 3
+        type: integer
+        name: current_temperature
+        unit: C
+        range:
+          min: -20
+          max: 50
+      - id: 4
+        type: string
+        name: mode
+        hidden: true
+      - id: 5
+        type: string
+        name: fan_mode
+        mapping:
+          - dps_val: low
+            value: low
+          - dps_val: medium
+            value: medium
+          - dps_val: high
+            value: high
+          - dps_val: auto
+            value: auto
+  - entity: sensor
+    name: Water temperature
+    class: temperature
+    category: diagnostic
+    dps:
+      - id: 101
+        type: integer
+        name: sensor
+        unit: C
+        class: measurement
+  - entity: binary_sensor
+    name: Water limit
+    class: problem
+    category: diagnostic
+    dps:
+      - id: 102
+        type: boolean
+        name: sensor
+  - entity: number
+    name: Cooling temperature limit
+    class: temperature
+    category: config
+    dps:
+      - id: 103
+        type: integer
+        name: value
+        unit: C
+        range:
+          min: 5
+          max: 40
+  - entity: number
+    name: Heating temperature limit
+    class: temperature
+    category: config
+    dps:
+      - id: 104
+        type: integer
+        name: value
+        unit: C
+        range:
+          min: 5
+          max: 90
+  - entity: binary_sensor
+    class: problem
+    category: diagnostic
+    dps:
+      - id: 6
+        type: bitfield
+        optional: true
+        name: sensor
+        mapping:
+          - dps_val: 0
+            value: false
+          - value: true
+      - id: 6
+        type: bitfield
+        optional: true
+        name: fault_code
+      - id: 6
+        type: bitfield
+        optional: true
+        name: description
+        mapping:
+          - dps_val: 0
+            value: ok
+          - dps_val: 1
+            value: E05
+          - dps_val: 2
+            value: F04
+          - dps_val: 3
+            value: E05, F04

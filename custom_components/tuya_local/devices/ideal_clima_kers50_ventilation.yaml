@@ -1,0 +1,115 @@
+name: Heat recovery ventilator
+products:
+  - id: elk0ylvtznushdrg
+    manufacturer: Ideal Clima
+    model: Kers+ 50
+entities:
+  - entity: fan
+    translation_key: ventilation
+    dps:
+      - id: 1
+        type: boolean
+        name: switch
+      - id: 3
+        type: string
+        name: preset_mode
+        mapping:
+          - dps_val: manual
+            value: manual
+          - dps_val: light
+            value: night
+          - dps_val: humidity
+            value: humidity
+            hidden: true
+          - dps_val: humidity1
+            value: humidity 1
+          - dps_val: humidity2
+            value: humidity 2
+          - dps_val: humidity3
+            value: humidity 3
+      - id: 4
+        type: string
+        name: speed
+        mapping:
+          - dps_val: sleep
+            value: 25
+          - dps_val: low
+            value: 50
+          - dps_val: mid
+            value: 75
+          - dps_val: high
+            value: 100
+  - entity: select
+    name: Fan direction
+    icon: "mdi:swap-horizontal"
+    dps:
+      - id: 101
+        type: string
+        name: option
+        mapping:
+          - dps_val: normal
+            value: normal
+          - dps_val: supply
+            value: supply
+          - dps_val: extract
+            value: extract
+          - dps_val: extract_boost
+            value: extract boost
+  - entity: sensor
+    class: temperature
+    dps:
+      - id: 12
+        type: integer
+        name: sensor
+        unit: C
+        class: measurement
+  - entity: sensor
+    class: humidity
+    dps:
+      - id: 13
+        type: integer
+        name: sensor
+        unit: "%"
+        class: measurement
+  - entity: sensor
+    translation_key: filter_life
+    category: diagnostic
+    dps:
+      - id: 5
+        type: integer
+        name: sensor
+        unit: "%"
+        class: measurement
+  - entity: button
+    translation_key: filter_reset
+    category: config
+    dps:
+      - id: 11
+        type: boolean
+        name: button
+  - entity: binary_sensor
+    class: problem
+    category: diagnostic
+    dps:
+      - id: 22
+        type: bitfield
+        name: sensor
+        mapping:
+          - dps_val: 0
+            value: false
+          - value: true
+      - id: 22
+        type: bitfield
+        name: fault_code
+      - id: 22
+        type: bitfield
+        name: description
+        mapping:
+          - dps_val: 0
+            value: ok
+          - dps_val: 1
+            value: e1
+          - dps_val: 2
+            value: e2
+          - dps_val: 3
+            value: e1, e2
