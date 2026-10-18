@@ -30,7 +30,7 @@ entities:
         name: temperature
         unit: C
         range:
-          min: 8
+          min: 16
           max: 32
       - id: 3
         type: integer
