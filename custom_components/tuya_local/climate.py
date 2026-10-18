@@ -2,6 +2,7 @@
 Setup for different kinds of Tuya climate devices
 """
 
+import asyncio
 import logging
 
 from homeassistant.components.climate import (
@@ -33,6 +34,7 @@ from homeassistant.const import (
     PRECISION_WHOLE,
     UnitOfTemperature,
 )
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .device import TuyaLocalDevice
 from .entity import TuyaLocalEntity, unit_from_ascii
@@ -40,6 +42,14 @@ from .helpers.config import async_tuya_setup_platform
 from .helpers.device_config import TuyaEntityConfig
 
 _LOGGER = logging.getLogger(__name__)
+
+# Some fan coil devices (e.g. the Ideal Clima Ikaro) only keep a setpoint that
+# is written while they are running: a setpoint set from Home Assistant while
+# the unit is off is accepted by the DP and then discarded at the next power
+# change, when the device reloads the setpoint it has stored (observed 7-12 s
+# after switching on).  Send the requested setpoint again once the device has
+# started, twice to cover the spread of the observed timing.
+_REASSERT_SETPOINT_DELAYS = (15, 35)
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
@@ -62,7 +72,7 @@ def validate_temp_unit(unit):
             _LOGGER.warning("%s is not a valid temperature unit", unit)
 
 
-class TuyaLocalClimate(TuyaLocalEntity, ClimateEntity):
+class TuyaLocalClimate(TuyaLocalEntity, ClimateEntity, RestoreEntity):
     """Representation of a Tuya Climate entity."""
 
     def __init__(self, device: TuyaLocalDevice, config: TuyaEntityConfig):
@@ -97,6 +107,10 @@ class TuyaLocalClimate(TuyaLocalEntity, ClimateEntity):
         self._mintemp_dps = dps_map.pop("min_temperature", None)
         self._maxtemp_dps = dps_map.pop("max_temperature", None)
 
+        # Last temperature requested from HA, re-sent once the device runs
+        # (see _schedule_setpoint_reassert).
+        self._requested_temperature = None
+
         self._init_end(dps_map)
 
         if self._fan_mode_dps:
@@ -123,6 +137,27 @@ class TuyaLocalClimate(TuyaLocalEntity, ClimateEntity):
             self._attr_supported_features |= ClimateEntityFeature.TURN_OFF
         if self._hvac_mode_dps and self._hvac_mode_dps.type is bool:
             self._attr_supported_features |= ClimateEntityFeature.TURN_ON
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        # The setpoint requested from HA is remembered to be re-sent once the
+        # device runs (see _schedule_setpoint_reassert); restore it across
+        # restarts so it does not have to be set again.
+        if self._temperature_dps is None or self._requested_temperature is not None:
+            return
+        state = await self.async_get_last_state()
+        if state is None:
+            return
+        temperature = state.attributes.get(ATTR_TEMPERATURE)
+        if temperature is None:
+            return
+        # Ignore a remembered setpoint that is outside the current range, e.g.
+        # one saved before the device minimum was raised.
+        if self.min_temp is not None and temperature < self.min_temp:
+            return
+        if self.max_temp is not None and temperature > self.max_temp:
+            return
+        self._requested_temperature = temperature
 
     @property
     def temperature_unit(self):
@@ -251,6 +286,7 @@ class TuyaLocalClimate(TuyaLocalEntity, ClimateEntity):
                 self._config.config_id,
                 kwargs.get(ATTR_TEMPERATURE),
             )
+            self._requested_temperature = kwargs.get(ATTR_TEMPERATURE)
             await self.async_set_target_temperature(
                 kwargs.get(ATTR_TEMPERATURE),
             )
@@ -392,7 +428,10 @@ class TuyaLocalClimate(TuyaLocalEntity, ClimateEntity):
             self._config.config_id,
             hvac_mode,
         )
+        was_off = self.hvac_mode == HVACMode.OFF
         await self._hvac_mode_dps.async_set_value(self._device, hvac_mode)
+        if was_off and hvac_mode != HVACMode.OFF:
+            self._schedule_setpoint_reassert()
 
     async def async_turn_on(self):
         """Turn on the climate device."""
@@ -401,6 +440,7 @@ class TuyaLocalClimate(TuyaLocalEntity, ClimateEntity):
         if self._hvac_mode_dps and self._hvac_mode_dps.type is bool:
             _LOGGER.info("%s turning on", self._config.config_id)
             await self._device.async_set_property(self._hvac_mode_dps.id, True)
+            self._schedule_setpoint_reassert()
         else:
             await super().async_turn_on()
 
@@ -416,6 +456,41 @@ class TuyaLocalClimate(TuyaLocalEntity, ClimateEntity):
             )
         else:
             await super().async_turn_off()
+
+    def _schedule_setpoint_reassert(self):
+        """Re-send the setpoint HA asked for, once the device runs.
+
+        Fan coil devices like the Ideal Clima Ikaro only store a setpoint
+        written while they are running: one set while the unit is off is
+        accepted by the DP and then discarded when the device reloads its
+        stored setpoint on start-up.  Send it again after it has settled.
+        """
+        if self._temperature_dps is None or self._requested_temperature is None:
+            return
+        for delay in _REASSERT_SETPOINT_DELAYS:
+            self._device._hass.async_create_task(
+                self._reassert_target_temperature(delay)
+            )
+
+    async def _reassert_target_temperature(self, delay):
+        """Re-send the setpoint the device may have discarded on start-up."""
+        await asyncio.sleep(delay)
+        temperature = self._requested_temperature
+        if temperature is None:
+            return
+        if self.hvac_mode == HVACMode.OFF:
+            # Nothing to do while the device is off: a setpoint written when
+            # it is not running would not be stored anyway.
+            return
+        if self.target_temperature == temperature:
+            # The device already has the requested setpoint, nothing to do.
+            return
+        _LOGGER.info(
+            "%s re-sending temperature %s after start-up",
+            self._config.config_id,
+            temperature,
+        )
+        await self.async_set_target_temperature(temperature)
 
     @property
     def preset_mode(self):
