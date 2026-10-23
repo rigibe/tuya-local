@@ -49,17 +49,21 @@ entities:
             value: eco
           - dps_val: false
             value: comfort
-      # DP 103 is a temperature source switch, not hvac_action:
-      # 0 = room temperature, 1 = floor temperature.
-      # - id: 103
-      #   type: string
-      #   optional: true
-      #   name: temp_source
-      #   mapping:
-      #     - dps_val: "0"
-      #       value: room
-      #     - dps_val: "1"
-      #       value: floor
+  - entity: select
+    name: Temperature source
+    icon: mdi:thermometer
+    category: config
+    dps:
+      - id: 103
+        type: string
+        # tempSwitch: 0 = room sensor, 1 = floor sensor
+        optional: true
+        name: option
+        mapping:
+          - dps_val: "0"
+            value: Room
+          - dps_val: "1"
+            value: Floor
   - entity: lock
     translation_key: child_lock
     category: config
@@ -83,4 +87,6 @@ entities:
           - scale: 2
       - id: 104
         type: boolean
+        # floortempFunction: floor sensor function enabled.
+        # Named "available" so the sensor is hidden while the function is off.
         name: available
