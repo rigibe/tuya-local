@@ -56,13 +56,15 @@ entities:
     dps:
       - id: 103
         type: string
-        # tempSwitch: 0 = room sensor, 1 = floor sensor
+        # tempSwitch: 0 = floor sensor, 1 = room sensor.
+        # The thermostat keeps reporting the source it is configured for;
+        # with no floor probe connected it refuses to switch to 0.
         optional: true
         name: option
         mapping:
-          - dps_val: "0"
-            value: Room
           - dps_val: "1"
+            value: Room
+          - dps_val: "0"
             value: Floor
   - entity: lock
     translation_key: child_lock
